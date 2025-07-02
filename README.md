@@ -1,6 +1,18 @@
-# 🚀 AI-Powered Job Scraper API
+# 🚀 AI-Powered Content Scraper API
 
-A flexible, production-ready job scraper that uses **Firecrawl** for content extraction and **OpenAI GPT-4** for intelligent data processing. Unlike traditional scrapers with rigid schemas, this system adapts to any job posting format.
+A flexible, production-ready scraper that uses **Firecrawl** for content extraction and **OpenAI GPT-4** for intelligent data processing. The system now supports both **job postings** and **Google Forms** with adaptive processing for any content format.
+
+## 🎯 Supported Content Types
+
+### 💼 Job Postings
+- Extract structured job data from any job site
+- Capture application questions and requirements
+- Intelligent salary, location, and requirement parsing
+
+### 📋 Google Forms  
+- Extract questions, options, and form structure
+- Support for all question types (multiple choice, text, scales, etc.)
+- Form metadata and validation rules capture
 
 ## ✨ Features
 
@@ -27,10 +39,10 @@ A flexible, production-ready job scraper that uses **Firecrawl** for content ext
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+┌─────────────────�����    ┌──────────────────┐    ┌─────────────────┐
 │   Firecrawl     │ -> │   OpenAI GPT-4   │ -> │    Supabase     │
 │  Content Scraper│    │  Data Extractor  │    │   Database      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+└─────────────────┘    └──────────────────┘    └──���──────────────┘
 ```
 
 ### Core Components
@@ -89,7 +101,7 @@ Visit `http://localhost:5005` to access the web interface.
 
 ## 📊 API Endpoints
 
-### **Flexible AI Scraping** (Recommended)
+### **Job Scraping** 
 ```http
 POST /api/scrape/flexible
 Content-Type: application/json
@@ -105,6 +117,29 @@ Content-Type: application/json
   "session_id": "uuid-here",
   "message": "Scraping started",
   "total_urls": 1
+}
+```
+
+### **Google Forms Scraping** ✨ NEW
+```http
+POST /api/forms/scrape
+Content-Type: application/json
+
+{
+  "urls": [
+    "https://docs.google.com/forms/d/1ABC123/viewform",
+    "https://forms.gle/XYZ789"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "session_id": "uuid-here",
+  "message": "Form scraping started successfully",
+  "total_urls": 2,
+  "estimated_time_minutes": 1.5
 }
 ```
 
@@ -313,4 +348,35 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Built with ❤️ for flexible, AI-powered job scraping** 
+## 📋 Google Forms Processing
+
+The system now includes comprehensive Google Forms processing capabilities:
+
+### Supported Form Elements
+- **Question Types**: Multiple choice, checkboxes, dropdowns, text fields, scales, dates, file uploads
+- **Form Structure**: Sections, descriptions, validation rules
+- **Metadata**: Response counts, settings, owner information
+- **Quality Assessment**: Automatic form accessibility and completeness scoring
+
+### Forms API Documentation
+For detailed Google Forms API documentation, see [docs/FORMS_API.md](docs/FORMS_API.md)
+
+### Quick Forms Example
+```python
+import requests
+
+# Scrape Google Forms
+response = requests.post('http://localhost:5005/api/forms/scrape', json={
+    'urls': ['https://docs.google.com/forms/d/1ABC123/viewform']
+})
+
+session_id = response.json()['session_id']
+
+# Check status
+status = requests.get(f'http://localhost:5005/api/forms/status/{session_id}')
+print(f"Progress: {status.json()['progress_percentage']}%")
+```
+
+---
+
+**Built with ❤️ for flexible, AI-powered content scraping (Jobs + Forms)**
