@@ -662,6 +662,341 @@ def main():
     else:
         print("Failed to connect to Supabase. Please check your credentials.")
 
+    # Form-specific operations
+    def create_form_scrape_session(self, session_data) -> str:
+        """Create a new form scraping session"""
+        try:
+            session_record = {
+                'urls': session_data.urls,
+                'total_urls': session_data.total_urls,
+                'processed_urls': session_data.processed_urls,
+                'successful_forms': session_data.successful_forms,
+                'failed_forms': session_data.failed_forms,
+                'status': session_data.status,
+                'progress_percentage': session_data.progress_percentage,
+                'summary': session_data.summary,
+                'error_details': session_data.error_details,
+                'user_id': session_data.user_id,
+                'started_at': session_data.started_at.isoformat() if session_data.started_at else None
+            }
+            
+            result = self.client.table('form_scrape_sessions').insert(session_record).execute()
+            
+            if result.data:
+                session_id = result.data[0]['id']
+                self.logger.info(f"Created form scrape session: {session_id}")
+                return session_id
+            else:
+                raise Exception("No data returned from session creation")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create form scrape session: {e}")
+            raise
+    
+    def update_session_progress(self, session_id: str, status: str, progress_percentage: float, processed_urls: int):
+        """Update session progress"""
+        try:
+            update_data = {
+                'status': status,
+                'progress_percentage': progress_percentage,
+                'processed_urls': processed_urls
+            }
+            
+            result = self.client.table('form_scrape_sessions').update(update_data).eq('id', session_id).execute()
+            
+            if not result.data:
+                self.logger.warning(f"No session found with ID: {session_id}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to update session progress: {e}")
+    
+    def complete_form_scrape_session(self, session_data):
+        """Complete a form scraping session"""
+        try:
+            update_data = {
+                'status': session_data.status,
+                'processed_urls': session_data.processed_urls,
+                'successful_forms': session_data.successful_forms,
+                'failed_forms': session_data.failed_forms,
+                'progress_percentage': session_data.progress_percentage,
+                'summary': session_data.summary,
+                'completed_at': session_data.completed_at.isoformat() if session_data.completed_at else None
+            }
+            
+            result = self.client.table('form_scrape_sessions').update(update_data).eq('id', session_data.id).execute()
+            
+            if result.data:
+                self.logger.info(f"Completed form scrape session: {session_data.id}")
+            else:
+                self.logger.warning(f"No session found with ID: {session_data.id}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to complete form scrape session: {e}")
+    
+    def fail_form_scrape_session(self, session_id: str, error_message: str):
+        """Mark a form scraping session as failed"""
+        try:
+            update_data = {
+                'status': 'failed',
+                'error_details': {'error': error_message},
+                'completed_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            result = self.client.table('form_scrape_sessions').update(update_data).eq('id', session_id).execute()
+            
+            if result.data:
+                self.logger.info(f"Marked form scrape session as failed: {session_id}")
+            else:
+                self.logger.warning(f"No session found with ID: {session_id}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to mark session as failed: {e}")
+    
+    def get_form_scrape_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get form scraping session details"""
+        try:
+            result = self.client.table('form_scrape_sessions').select('*').eq('id', session_id).execute()
+            
+            if result.data:
+                return result.data[0]
+            else:
+                self.logger.warning(f"No session found with ID: {session_id}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get form scrape session: {e}")
+            return None
+    
+    def store_form_data(self, form_data, ai_result=None) -> Dict[str, Any]:
+        """Store Google Form data in Supabase"""
+        try:
+            # Prepare form record
+            form_record = {
+                'url': form_data.url,
+                'title': form_data.title,
+                'description': form_data.description,
+                'form_id': form_data.form_id,
+                'owner_email': form_data.owner_email,
+                'response_count': form_data.response_count,
+                'is_accepting_responses': form_data.is_accepting_responses,
+                'requires_login': form_data.requires_login,
+                'allow_response_editing': form_data.allow_response_editing,
+                'collect_email': form_data.collect_email,
+                'raw_data': form_data.raw_data,
+                'scraped_at': form_data.scraped_at.isoformat() if form_data.scraped_at else None,
+                'last_updated': form_data.last_updated.isoformat() if form_data.last_updated else None
+            }
+            
+            # Insert form
+            form_result = self.client.table('forms').insert(form_record).execute()
+            
+            if not form_result.data:
+                raise Exception("Failed to insert form record")
+            
+            form_id = form_result.data[0]['id']
+            self.logger.info(f"Stored form: {form_id} - {form_data.title}")
+            
+            # Store questions
+            question_ids = []
+            for question in form_data.questions:
+                question_record = {
+                    'form_id': form_id,
+                    'question_index': question.question_index,
+                    'question_text': question.question_text,
+                    'question_type': question.question_type.value,
+                    'description': question.description,
+                    'is_required': question.is_required,
+                    'has_other_option': question.has_other_option,
+                    'validation_rules': [
+                        {
+                            'rule_type': rule.rule_type,
+                            'value': rule.value,
+                            'error_message': rule.error_message
+                        } for rule in question.validation_rules
+                    ],
+                    'settings': question.settings
+                }
+                
+                question_result = self.client.table('form_questions').insert(question_record).execute()
+                
+                if question_result.data:
+                    question_id = question_result.data[0]['id']
+                    question_ids.append(question_id)
+                    
+                    # Store question options
+                    for option in question.options:
+                        option_record = {
+                            'question_id': question_id,
+                            'option_index': option.option_index,
+                            'option_text': option.option_text,
+                            'is_other_option': option.is_other_option
+                        }
+                        
+                        self.client.table('question_options').insert(option_record).execute()
+            
+            # Store sections
+            section_ids = []
+            for section in form_data.sections:
+                section_record = {
+                    'form_id': form_id,
+                    'section_index': section.section_index,
+                    'title': section.title,
+                    'description': section.description
+                }
+                
+                section_result = self.client.table('form_sections').insert(section_record).execute()
+                
+                if section_result.data:
+                    section_ids.append(section_result.data[0]['id'])
+            
+            self.logger.info(f"Stored form data: {len(question_ids)} questions, {len(section_ids)} sections")
+            
+            return {
+                'form_id': form_id,
+                'question_ids': question_ids,
+                'section_ids': section_ids,
+                'questions_count': len(question_ids),
+                'sections_count': len(section_ids)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to store form data: {e}")
+            raise
+    
+    def store_processing_logs(self, logs: List[Dict[str, Any]]):
+        """Store form processing logs"""
+        try:
+            if not logs:
+                return
+            
+            # Prepare log records
+            log_records = []
+            for log in logs:
+                log_record = {
+                    'session_id': log.get('session_id'),
+                    'url': log.get('url'),
+                    'processing_stage': log.get('processing_stage'),
+                    'status': log.get('status'),
+                    'message': log.get('message'),
+                    'details': log.get('details', {}),
+                    'processing_time_ms': log.get('processing_time_ms'),
+                    'form_id': log.get('form_id')
+                }
+                log_records.append(log_record)
+            
+            # Insert logs
+            result = self.client.table('form_processing_logs').insert(log_records).execute()
+            
+            if result.data:
+                self.logger.info(f"Stored {len(result.data)} processing logs")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to store processing logs: {e}")
+    
+    def get_form_by_url(self, url: str) -> Optional[Dict[str, Any]]:
+        """Get form data by URL"""
+        try:
+            result = self.client.table('forms').select('*').eq('url', url).execute()
+            
+            if result.data:
+                return result.data[0]
+            else:
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get form by URL: {e}")
+            return None
+    
+    def get_form_with_questions(self, form_id: str) -> Optional[Dict[str, Any]]:
+        """Get complete form data with questions and options"""
+        try:
+            # Get form
+            form_result = self.client.table('forms').select('*').eq('id', form_id).execute()
+            
+            if not form_result.data:
+                return None
+            
+            form_data = form_result.data[0]
+            
+            # Get questions
+            questions_result = self.client.table('form_questions').select('*').eq('form_id', form_id).order('question_index').execute()
+            
+            questions = []
+            for question in questions_result.data:
+                # Get options for this question
+                options_result = self.client.table('question_options').select('*').eq('question_id', question['id']).order('option_index').execute()
+                
+                question['options'] = options_result.data
+                questions.append(question)
+            
+            form_data['questions'] = questions
+            
+            # Get sections
+            sections_result = self.client.table('form_sections').select('*').eq('form_id', form_id).order('section_index').execute()
+            form_data['sections'] = sections_result.data
+            
+            return form_data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get form with questions: {e}")
+            return None
+    
+    def get_recent_forms(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recently scraped forms"""
+        try:
+            result = self.client.table('forms').select('*').order('scraped_at', desc=True).limit(limit).execute()
+            return result.data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get recent forms: {e}")
+            return []
+    
+    def get_session_statistics(self, session_id: str) -> Dict[str, Any]:
+        """Get detailed statistics for a scraping session"""
+        try:
+            # Get session info
+            session = self.get_form_scrape_session(session_id)
+            if not session:
+                return {}
+            
+            # Get processing logs
+            logs_result = self.client.table('form_processing_logs').select('*').eq('session_id', session_id).execute()
+            
+            logs = logs_result.data
+            
+            # Calculate statistics
+            stats = {
+                'session_info': session,
+                'total_logs': len(logs),
+                'logs_by_stage': {},
+                'logs_by_status': {},
+                'processing_times': [],
+                'errors': []
+            }
+            
+            for log in logs:
+                stage = log.get('processing_stage', 'unknown')
+                status = log.get('status', 'unknown')
+                
+                stats['logs_by_stage'][stage] = stats['logs_by_stage'].get(stage, 0) + 1
+                stats['logs_by_status'][status] = stats['logs_by_status'].get(status, 0) + 1
+                
+                if log.get('processing_time_ms'):
+                    stats['processing_times'].append(log['processing_time_ms'])
+                
+                if status == 'error':
+                    stats['errors'].append({
+                        'url': log.get('url'),
+                        'stage': stage,
+                        'message': log.get('message'),
+                        'details': log.get('details', {})
+                    })
+            
+            return stats
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get session statistics: {e}")
+            return {}
+
 if __name__ == "__main__":
     main()
-

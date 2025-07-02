@@ -20,6 +20,7 @@ from flask_cors import CORS
 from src.models.user import db
 from src.routes.user import user_bp
 from src.routes.jobs import jobs_bp
+from src.routes.forms import forms_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
@@ -42,6 +43,7 @@ CORS(app)
 
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(jobs_bp, url_prefix='/api')
+app.register_blueprint(forms_bp, url_prefix='/api')
 
 # Database configuration
 db_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
